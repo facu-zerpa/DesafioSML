@@ -1,10 +1,10 @@
 # DesafioSML
 
-## Backend
+## Backend .NET CORE 6
   - Configurar DefaultConnection ubicado en appsetting.json
   - Add-Migration Initial
   - Update-Database
 
-## Frontend
+## Frontend REACT JS
   - npm install
   - npm start
