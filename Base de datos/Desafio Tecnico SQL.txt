@@ -1,0 +1,160 @@
+CREATE TABLE Editorials (
+  	IdEditorial int NOT NULL IDENTITY(1,1),
+  	Name varchar(50),
+  	PRIMARY KEY (IdEditorial)
+ );
+ 
+CREATE TABLE Persons (
+   	IdPerson int NOT NULL IDENTITY(1,1),
+   	Name varchar(50),
+   	LastName varchar(50),
+   	PRIMARY KEY (IdPerson)
+ );
+ 
+CREATE TABLE Books (
+   	IdBook varchar(5) NOT NULL,
+  	IdEditorial int NOT NULL FOREIGN KEY REFERENCES Editorials(IdEditorial),
+   	Title varchar(100),
+   	PRIMARY KEY (IdBook)
+ );
+ 
+CREATE TABLE BooksAuthors (
+   	IdBook varchar(5) NOT NULL FOREIGN KEY REFERENCES Books(IdBook),
+   	IdPerson int NOT NULL FOREIGN KEY REFERENCES Persons(IdPerson),
+   	PRIMARY KEY (IdBook, IdPerson)
+ );
+ 
+CREATE TABLE BorrowBooks (
+	IdBorrowBooks int NOT NULL IDENTITY(1,1),
+   	IdPerson int NOT NULL FOREIGN KEY REFERENCES Persons(IdPerson),
+   	IdBook varchar(5) NOT NULL FOREIGN KEY REFERENCES Books(IdBook),
+   	ReturnDate date NOT NULL,
+   	PRIMARY KEY (IdBorrowBooks)
+ );
+ 
+INSERT INTO Editorials (Name) VALUES ('EMECE');
+INSERT INTO Editorials (Name) VALUES ('Planeta');
+INSERT INTO Editorials (Name) VALUES ('Alfaguara');
+ 
+INSERT INTO Persons (Name, LastName) VALUES ('Pedro', 'Mairal');
+INSERT INTO Persons (Name, LastName) VALUES ('Gomez', 'Ana');
+INSERT INTO Persons (Name, LastName) VALUES ('Perez', 'Juan');
+INSERT INTO Persons (Name, LastName) VALUES ('Eduardo', 'Sacheri');
+INSERT INTO Persons (Name, LastName) VALUES ('Jose', 'Sanchez');
+INSERT INTO Persons (Name, LastName) VALUES ('Hernan', 'Casciari');
+
+INSERT INTO Books (IdBook, IdEditorial, Title) VALUES ('1001', 1, 'La uruguaya');
+INSERT INTO Books (IdBook, IdEditorial, Title) VALUES ('1004', 1, 'Savatierra');
+INSERT INTO Books (IdBook, IdEditorial, Title) VALUES ('1005', 2, 'El funcionamiento general del mundo');
+INSERT INTO Books (IdBook, IdEditorial, Title) VALUES ('1006', 3, 'Ser feliz era esto');
+INSERT INTO Books (IdBook, IdEditorial, Title) VALUES ('1007', 1, 'Cuentos cortos');
+
+INSERT INTO BooksAuthors (IdBook, IdPerson) VALUES ('1001', 1);
+INSERT INTO BooksAuthors (IdBook, IdPerson) VALUES ('1004', 1);
+INSERT INTO BooksAuthors (IdBook, IdPerson) VALUES ('1005', 4);
+INSERT INTO BooksAuthors (IdBook, IdPerson) VALUES ('1005', 1);
+INSERT INTO BooksAuthors (IdBook, IdPerson) VALUES ('1006', 4);
+INSERT INTO BooksAuthors (IdBook, IdPerson) VALUES ('1007', 4);
+INSERT INTO BooksAuthors (IdBook, IdPerson) VALUES ('1007', 1);
+INSERT INTO BooksAuthors (IdBook, IdPerson) VALUES ('1007', 6);
+
+INSERT INTO BorrowBooks (IdPerson, IdBook, ReturnDate) VALUES (2, '1001', '2021-01-01');
+INSERT INTO BorrowBooks (IdPerson, IdBook, ReturnDate) VALUES (3, '1004', '2021-01-02');
+INSERT INTO BorrowBooks (IdPerson, IdBook, ReturnDate) VALUES (2, '1004', '2021-03-01');
+INSERT INTO BorrowBooks (IdPerson, IdBook, ReturnDate) VALUES (2, '1005', '2021-08-01');
+INSERT INTO BorrowBooks (IdPerson, IdBook, ReturnDate) VALUES (5, '1006', '2021-08-01');
+INSERT INTO BorrowBooks (IdPerson, IdBook, ReturnDate) VALUES (5, '1007', '2021-08-01');
+INSERT INTO BorrowBooks (IdPerson, IdBook, ReturnDate) VALUES (2, '1001', '2021-04-01');
+
+-- A
+WITH BooksAuthorsCTE (IdBook, Authors)
+AS
+(
+  SELECT 
+    ba.IdBook AS IdBook,
+    STUFF((
+      SELECT ', ' + p.Name + ' '+ p.LastName 
+      FROM BooksAuthors baa
+      INNER JOIN PERSONS AS p ON p.IdPerson = baa.idPerson
+      WHERE baa.idbook = ba.idbook
+      FOR XML PATH (''))
+    ,1,2,'') AS Authors
+  FROM BooksAuthors ba
+  GROUP BY ba.IdBook
+)
+
+SELECT 
+	b.IdBook AS 'IdBook',
+	b.Title AS 'Title',
+    e.Name as 'Editorial',
+    baCTE.Authors AS 'Authors',
+    q.CountReturn as 'Count' FROM (
+		SELECT TOP 10 bb.IdBook as 'IdBook', COUnT(bb.IdBook) as 'CountReturn' FROM
+			BorrowBooks as bb
+			GROUP BY bb.IdBook
+			ORDER BY COUnT(bb.IdBook) DESC) AS q
+	INNER JOIN Books as b ON b.IdBook = q.IdBook
+	INNER JOIN Editorials AS e ON e.IdEditorial = b.IdEditorial
+    INNER JOIN BooksAuthorsCTE AS baCTE ON baCTE.IdBook = b.IdBook
+    
+-- B    
+SELECT 
+	(SELECT b.Title FROM Books AS b WHERE b.IdBook = ba.IdBook) AS 'Title', 
+    COUNT(ba.IdBook)  
+FROM BooksAuthors as ba
+GROUP BY ba.IdBook
+HAVING COUNT(ba.IdBook) > 2
+ 
+-- C
+SELECT 
+	(SELECT p.Name + ' ' + p.LastName AS 'Reader' FROM Persons as p WHERE p.IdPerson = bb.IdPerson), 
+    (SELECT b.Title FROM Books AS b WHERE b.IdBook = bb.IdBook) AS 'Title', 
+    COUNT(bb.IdPerson) FROM BorrowBooks AS bb
+GROUP BY bb.IdPerson, bb.IdBook
+
+-- D
+SELECT 
+	bb.IdBook,
+    (SELECT b.Title FROM Books AS b WHERE b.IdBook = bb.IdBook) AS 'Title',
+	DATEPART(MONTH, bb.ReturnDate) as 'Month',
+    DATEPART(YEAR, bb.ReturnDate) as 'Year',
+    COUNT(DATEPART(MONTH, bb.ReturnDate)) 
+FROM BorrowBooks as bb
+GROUP BY DATEPART(MONTH, bb.ReturnDate), DATEPART(YEAR, bb.ReturnDate), bb.IdBook
+HAVING DATEPART(YEAR, bb.ReturnDate) = 2021 AND COUNT(DATEPART(MONTH, bb.ReturnDate)) > 0
+
+
+-- E
+WITH RankedBooks AS (
+    SELECT 
+        bb.IdPerson AS 'IdPerson', 
+        bb.IdBook AS 'IdBook',
+        COUNT(bb.IdBook) as 'CountBook',
+        RANK() OVER (PARTITION BY bb.IdPerson ORDER BY COUNT(bb.IdBook) DESC) AS 'Rank'
+    FROM BorrowBooks as bb
+    GROUP BY bb.IdPerson, bb.IdBook
+),
+BooksAuthorsCTE (IdBook, Authors)
+AS
+(
+  SELECT 
+    ba.IdBook AS IdBook,
+    STUFF((
+      SELECT ', ' + p.Name + ' '+ p.LastName 
+      FROM BooksAuthors baa
+      INNER JOIN PERSONS AS p ON p.IdPerson = baa.idPerson
+      WHERE baa.idbook = ba.idbook
+      FOR XML PATH (''))
+    ,1,2,'') AS Authors
+  FROM BooksAuthors ba
+  GROUP BY ba.IdBook
+)
+
+SELECT 
+    rb.IdPerson AS 'IdReader',
+	(SELECT p.Name + ' ' + p.LastName FROM Persons AS p WHERE p.IdPerson = rb.IdPerson) as 'Reader',
+	rb.IdBook,
+	baCTE.Authors AS 'Authors'
+FROM RankedBooks as rb
+INNER JOIN BooksAuthorsCTE AS baCTE ON baCTE.IdBook = rb.IdBook
+WHERE Rank = 1;
